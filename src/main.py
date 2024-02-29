@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 from tqdm import tqdm
 
 from configs import configure_argument_parser, configure_logging
-from constants import BASE_DIR, MAIN_DOC_URL, PEP_URL
+from constants import BASE_DIR, MAIN_DOC_URL, PEP_URL, EXPECTED_STATUS
 from outputs import control_output
 from utils import get_response, find_tag
 
@@ -108,6 +108,15 @@ def pep(session):
         soup = BeautifulSoup(response.text, "lxml")
         start = find_tag(soup, text=re.compile("^Status$")).parent
         dd = start.find_next_sibling("dd").text
+
+        if dd not in EXPECTED_STATUS[
+                list(td_tag.text)[-1] if len(td_tag.text) == 2 else '']:
+            msg = f"""Несовпадающие статусы:
+                      {link_object}
+                      Статус в карточке: {dd}
+                      Ожидаемые статусы: {EXPECTED_STATUS[
+                          list(td_tag.text)[-1]]}"""
+            logging.info(msg=msg)
         counter[dd] = counter.get(dd, 0) + 1
     counter["Total"] = sum(i for i in counter.values())
     results = [("Статус", "Количество")]
@@ -134,7 +143,6 @@ def main():
         session.cache.clear()
     parser_mode = args.mode
     results = MODE_TO_FUNCTION[parser_mode](session)
-    MODE_TO_FUNCTION[parser_mode](session)
     if results is not None:
         control_output(results, args)
     logging.info('Парсер завершил работу.')
