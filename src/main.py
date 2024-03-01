@@ -11,8 +11,6 @@ from constants import BASE_DIR, EXPECTED_STATUS, MAIN_DOC_URL, PEP_URL
 from outputs import control_output
 from utils import find_tag, make_soup
 
-DOWNLOADS_DIR = BASE_DIR / 'downloads'
-
 MESSAGE_NOT_CORRECT_STATUS = """Несовпадающие статусы:
                                 {link_object}
                                 Статус в карточке: {dd}
@@ -72,6 +70,7 @@ def download(session):
     pdf_a4_link = pdf_a4_tag['href']
     archive_url = urljoin(downloads_url, pdf_a4_link)
     filename = archive_url.split('/')[-1]
+    DOWNLOADS_DIR = BASE_DIR / 'downloads'
     DOWNLOADS_DIR.mkdir(exist_ok=True)
     archive_path = DOWNLOADS_DIR / filename
     response = session.get(archive_url)

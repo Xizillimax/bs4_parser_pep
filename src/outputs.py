@@ -6,8 +6,6 @@ from prettytable import PrettyTable
 
 from constants import BASE_DIR, DATETIME_FORMAT, FILE, PRETTY
 
-RESULTS_DIR = BASE_DIR / 'results'
-
 MESSAGE_INFO = 'Файл с результатами был сохранён: {file_path}'
 
 
@@ -25,6 +23,7 @@ def pretty_output(results, *args):
 
 
 def file_output(results, cli_args):
+    RESULTS_DIR = BASE_DIR / 'results'
     RESULTS_DIR.mkdir(exist_ok=True)
     parser_mode = cli_args.mode
     now = dt.datetime.now()
