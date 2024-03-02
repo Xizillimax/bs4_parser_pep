@@ -32,9 +32,9 @@ def whats_new(session):
         make_soup(
             session,
             whats_new_url
-        ).select(
-            '#what-s-new-in-python div.toctree-wrapper li.toctree-l1 a'
-        )
+        ).select_one(
+            '#what-s-new-in-python div.toctree-wrapper li.toctree-l1'
+        ).select('a.reference')
     ):
         try:
             version_link = urljoin(whats_new_url, section['href'])
