@@ -22,8 +22,8 @@ EXPECTED_STATUS = {
     '': ('Draft', 'Active'),
 }
 
-PRETTY = 'pretty'
-FILE = 'file'
+PRETTY_PARAMETR = 'pretty'
+FILE_PARAMETR = 'file'
 
 LOG_FORMAT = '"%(asctime)s - [%(levelname)s] - %(message)s"'
 DT_FORMAT = '%d.%m.%Y %H:%M:%S'

@@ -15,24 +15,37 @@ MESSAGE_NOT_CORRECT_STATUS = """Несовпадающие статусы:
                                 {link_object}
                                 Статус в карточке: {dd}
                                 Ожидаемые статусы: {status}"""
+MESSAGE_NOT_INFO = 'Не найден список c версиями Python'
 
 MESSAGE_INFO = 'Архив был загружен и сохранён: {archive_path}'
-MESSAGE_START_PARSER = 'Аргументы командной строки: {args}'
+MESSAGE_START_PARSER = 'Парсер запущен!'
+MESSAGE_LOAD_PARSER = 'Аргументы командной строки: {args}'
+MESSAGE_OFF_PARSER = 'Парсер завершил работу.'
+
+DOWNLOADS_PARAMETR = 'downloads'
 
 
 def whats_new(session):
     results = [('Ссылка на статью', 'Заголовок', 'Редактор, Автор')]
     whats_new_url = urljoin(MAIN_DOC_URL, 'whatsnew/')
-    for section in tqdm(make_soup(session, whats_new_url).select(
-            '#what-s-new-in-python div.toctree-wrapper li.toctree-l1')):
-        version_a_tag = find_tag(section, 'a')
-        version_link = urljoin(whats_new_url, version_a_tag['href'])
-        results.append(
-            (version_link,
-             find_tag(make_soup(session, version_link), 'h1').text,
-             find_tag(make_soup(session, version_link),
-                      'dl').text.replace('\n', ' '))
+    for section in tqdm(
+        make_soup(
+            session,
+            whats_new_url
+        ).select(
+            '#what-s-new-in-python div.toctree-wrapper li.toctree-l1 a'
         )
+    ):
+        try:
+            version_link = urljoin(whats_new_url, section['href'])
+            soup = make_soup(session, version_link)
+            results.append(
+                (version_link,
+                 find_tag(soup, 'h1').text,
+                 find_tag(soup, 'dl').text.replace('\n', ' '))
+            )
+        except Exception as error:
+            logging.exception(error, stack_info=True)
     return results
 
 
@@ -46,7 +59,7 @@ def latest_versions(session):
             a_tags = ul.find_all('a')
             break
     else:
-        raise KeyError('Не найден список c версиями Python')
+        raise RecursionError(MESSAGE_NOT_INFO)
     pattern = r'Python (?P<version>\d\.\d+) \((?P<status>.*)\)'
     for a_tag in a_tags:
         text_match = re.search(pattern, a_tag.text)
@@ -70,7 +83,7 @@ def download(session):
     pdf_a4_link = pdf_a4_tag['href']
     archive_url = urljoin(downloads_url, pdf_a4_link)
     filename = archive_url.split('/')[-1]
-    DOWNLOADS_DIR = BASE_DIR / 'downloads'
+    DOWNLOADS_DIR = BASE_DIR / DOWNLOADS_PARAMETR
     DOWNLOADS_DIR.mkdir(exist_ok=True)
     archive_path = DOWNLOADS_DIR / filename
     response = session.get(archive_url)
@@ -90,19 +103,18 @@ def pep(session):
         link_object = urljoin(PEP_URL, href_object.a["href"])
         start = find_tag(make_soup(session, link_object),
                          text=re.compile("^Status$")).parent
-        dd = start.find_next_sibling("dd").text
+        dd_tag = start.find_next_sibling("dd").text
 
-        if dd not in EXPECTED_STATUS[
+        if dd_tag not in EXPECTED_STATUS[
                 list(td_tag.text)[-1] if len(td_tag.text) == 2 else '']:
             status = EXPECTED_STATUS[list(td_tag.text)[-1]]
             logs.append(MESSAGE_NOT_CORRECT_STATUS.format(
                 link_object=link_object,
-                dd=dd,
+                dd_tag=dd_tag,
                 status=status
             ))
-        counter[dd] += 1
-    for log in logs:
-        logging.info(log)
+        counter[dd_tag] += 1
+    list(map(logging.info, logs))
     return [
         ('Статус', 'Количество'),
         *counter.items(),
@@ -120,10 +132,10 @@ MODE_TO_FUNCTION = {
 
 def main():
     configure_logging()
-    logging.info('Парсер запущен!')
+    logging.info(MESSAGE_START_PARSER)
     arg_parser = configure_argument_parser(MODE_TO_FUNCTION.keys())
     args = arg_parser.parse_args()
-    logging.info(MESSAGE_START_PARSER.format(args=args))
+    logging.info(MESSAGE_LOAD_PARSER.format(args=args))
     try:
         session = requests_cache.CachedSession()
         if args.clear_cache:
@@ -134,7 +146,7 @@ def main():
             control_output(results, args)
     except Exception as error:
         logging.exception(error, stack_info=True)
-    logging.info('Парсер завершил работу.')
+    logging.info(MESSAGE_OFF_PARSER)
 
 
 if __name__ == '__main__':
