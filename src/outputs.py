@@ -35,7 +35,7 @@ def file_output(results, cli_args):
     logging.info(MESSAGE_INFO.format(file_path=file_path))
 
 
-VAR_OUTPUT = {
+VARIANTS_OUTPUT = {
     PRETTY_PARAMETR: pretty_output,
     FILE_PARAMETR: file_output,
     None: default_output
@@ -43,4 +43,4 @@ VAR_OUTPUT = {
 
 
 def control_output(results, cli_args):
-    VAR_OUTPUT.get(cli_args.output)(results, cli_args)
+    VARIANTS_OUTPUT.get(cli_args.output)(results, cli_args)

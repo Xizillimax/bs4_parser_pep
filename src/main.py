@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 from configs import configure_argument_parser, configure_logging
 from constants import BASE_DIR, EXPECTED_STATUS, MAIN_DOC_URL, PEP_URL
+from exceptions import ParserFindTagException
 from outputs import control_output
 from utils import find_tag, make_soup
 
@@ -26,40 +27,42 @@ DOWNLOADS_PARAMETR = 'downloads'
 
 
 def whats_new(session):
+    logs = []
     results = [('Ссылка на статью', 'Заголовок', 'Редактор, Автор')]
     whats_new_url = urljoin(MAIN_DOC_URL, 'whatsnew/')
-    for section in tqdm(
+    for a_tag in tqdm(
         make_soup(
             session,
             whats_new_url
-        ).select_one(
-            '#what-s-new-in-python div.toctree-wrapper li.toctree-l1'
-        ).select('a.reference')
+        ).select(
+            '#what-s-new-in-python div.toctree-wrapper'
+            'li.toctree-l1 a.reference'
+        )
     ):
         try:
-            version_link = urljoin(whats_new_url, section['href'])
+            version_link = urljoin(whats_new_url, a_tag['href'])
             soup = make_soup(session, version_link)
             results.append(
                 (version_link,
                  find_tag(soup, 'h1').text,
                  find_tag(soup, 'dl').text.replace('\n', ' '))
             )
-        except Exception as error:
-            logging.exception(error, stack_info=True)
+        except ConnectionError as error:
+            logs.append(error)
+    list(map(logging.exception, logs))
     return results
 
 
 def latest_versions(session):
     results = [('Ссылка на документацию', 'Версия', 'Статус')]
-    sidebar = find_tag(make_soup(session, MAIN_DOC_URL),
-                       'div', {'class': 'sphinxsidebarwrapper'})
-    ul_tags = sidebar.find_all('ul')
+    ul_tags = make_soup(session, MAIN_DOC_URL).select_one(
+        'div.sphinxsidebarwrapper').find_all('ul')
     for ul in ul_tags:
         if 'All versions' in ul.text:
             a_tags = ul.find_all('a')
             break
     else:
-        raise RecursionError(MESSAGE_NOT_INFO)
+        raise ParserFindTagException(MESSAGE_NOT_INFO)
     pattern = r'Python (?P<version>\d\.\d+) \((?P<status>.*)\)'
     for a_tag in a_tags:
         text_match = re.search(pattern, a_tag.text)
@@ -74,14 +77,16 @@ def latest_versions(session):
 
 
 def download(session):
-    downloads_url = urljoin(MAIN_DOC_URL, 'download.html')
-    main_tag = find_tag(make_soup(session, downloads_url),
-                        'div', {'role': 'main'})
-    table_tag = find_tag(main_tag, 'table', {'class': 'docutils'})
-    pdf_a4_tag = find_tag(table_tag, 'a',
-                          {'href': re.compile(r'.+pdf-a4\.zip$')})
-    pdf_a4_link = pdf_a4_tag['href']
-    archive_url = urljoin(downloads_url, pdf_a4_link)
+    archive_url = urljoin(
+        urljoin(
+            MAIN_DOC_URL,
+            'download.html'),
+        make_soup(
+            session,
+            urljoin(MAIN_DOC_URL, 'download.html')
+        ).select_one(
+            'div[role="main"] table.docutils a[href$="-pdf-a4.zip"]'
+        )['href'])
     filename = archive_url.split('/')[-1]
     DOWNLOADS_DIR = BASE_DIR / DOWNLOADS_PARAMETR
     DOWNLOADS_DIR.mkdir(exist_ok=True)
@@ -94,27 +99,32 @@ def download(session):
 
 
 def pep(session):
-    logs = []
+    logs_info = []
+    logs_exception = []
     counter = defaultdict(int)
     for string in tqdm(make_soup(session, PEP_URL).select(
             '#numerical-index tbody tr')):
         td_tag = find_tag(string, "td")
         href_object = td_tag.find_next_sibling("td")
         link_object = urljoin(PEP_URL, href_object.a["href"])
-        start = find_tag(make_soup(session, link_object),
-                         text=re.compile("^Status$")).parent
+        try:
+            start = find_tag(make_soup(session, link_object),
+                             text=re.compile("^Status$")).parent
+        except ConnectionError as error:
+            logs_exception.append(error)
         dd_tag = start.find_next_sibling("dd").text
 
         if dd_tag not in EXPECTED_STATUS[
                 list(td_tag.text)[-1] if len(td_tag.text) == 2 else '']:
             status = EXPECTED_STATUS[list(td_tag.text)[-1]]
-            logs.append(MESSAGE_NOT_CORRECT_STATUS.format(
+            logs_info.append(MESSAGE_NOT_CORRECT_STATUS.format(
                 link_object=link_object,
                 dd_tag=dd_tag,
                 status=status
             ))
         counter[dd_tag] += 1
-    list(map(logging.info, logs))
+    list(map(logging.info, logs_info))
+    list(map(logging.exception, logs_exception))
     return [
         ('Статус', 'Количество'),
         *counter.items(),
