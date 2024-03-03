@@ -49,7 +49,7 @@ def whats_new(session):
             )
         except ConnectionError as error:
             logs.append(error)
-    list(map(logging.exception, logs))
+    list(map(logging.warning, logs))
     return results
 
 
@@ -110,21 +110,21 @@ def pep(session):
         try:
             start = find_tag(make_soup(session, link_object),
                              text=re.compile("^Status$")).parent
+            dd_tag = start.find_next_sibling("dd").text
+
+            if dd_tag not in EXPECTED_STATUS[
+                    list(td_tag.text)[-1] if len(td_tag.text) == 2 else '']:
+                status = EXPECTED_STATUS[list(td_tag.text)[-1]]
+                logs_info.append(MESSAGE_NOT_CORRECT_STATUS.format(
+                    link_object=link_object,
+                    dd_tag=dd_tag,
+                    status=status
+                ))
+            counter[dd_tag] += 1
         except ConnectionError as error:
             logs_exception.append(error)
-        dd_tag = start.find_next_sibling("dd").text
-
-        if dd_tag not in EXPECTED_STATUS[
-                list(td_tag.text)[-1] if len(td_tag.text) == 2 else '']:
-            status = EXPECTED_STATUS[list(td_tag.text)[-1]]
-            logs_info.append(MESSAGE_NOT_CORRECT_STATUS.format(
-                link_object=link_object,
-                dd_tag=dd_tag,
-                status=status
-            ))
-        counter[dd_tag] += 1
     list(map(logging.info, logs_info))
-    list(map(logging.exception, logs_exception))
+    list(map(logging.warning, logs_exception))
     return [
         ('Статус', 'Количество'),
         *counter.items(),
